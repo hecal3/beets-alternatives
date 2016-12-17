@@ -11,6 +11,7 @@
 # all copies or substantial portions of the Software.
 
 
+import sys
 import os.path
 import threading
 from argparse import ArgumentParser
@@ -30,8 +31,9 @@ log = logging.getLogger('beets.alternatives')
 
 def get_unicode_config(config, key):
     ret = config[key].get(str)
-    if type(ret) != unicode:
-        ret = unicode(ret, 'utf8')
+    if sys.version_info[0] < 3:
+        if type(ret) != unicode:
+            ret = unicode(ret, 'utf8')
     return ret
 
 
@@ -57,7 +59,8 @@ class AlternativesPlugin(BeetsPlugin):
             raise KeyError(name)
 
         if conf['formats'].exists():
-            fmt = conf['formats'].get(unicode)
+            # fmt = conf['formats'].get(unicode)
+            fmt = get_unicode_config(conf, 'formats')
             if fmt == 'link':
                 return SymlinkView(name, lib, conf)
             else:
@@ -113,20 +116,35 @@ class External(object):
         query = get_unicode_config(config, 'query')
         self.query, _ = parse_query_string(query, Item)
 
+        if 'convert_when' in config:
+            # self.convert_when = config['convert_when'].get(unicode)
+            self.convert_when = get_unicode_config(config, 'convert_when')
+        else:
+            self.convert_when = 'True'
+
         self.removable = config.get(dict).get('removable', True)
 
         if 'directory' in config:
-            dir = config['directory'].get(str)
+            directory = get_unicode_config(config, 'directory')
         else:
-            dir = self.name
-        if not os.path.isabs(dir):
-            dir = os.path.join(self.lib.directory, dir)
-        self.directory = bytestring_path(dir)
+            directory = self.name
+        if not os.path.isabs(directory):
+            if sys.version_info[0] < 3:
+                working_dir = self.lib.directory
+            else:
+                working_dir = os.path.abspath(self.lib.directory).decode('utf-8')
+            directory = os.path.abspath(os.path.join(working_dir, directory))
+
+        self.directory = bytestring_path(directory)
 
     def matched_item_action(self, item):
         path = self.get_path(item)
+        if sys.version_info[0] >= 3 and path is not None:
+            path = path.decode('utf-8')
         if path and os.path.isfile(path):
             dest = self.destination(item)
+            if sys.version_info[0] >= 3 and dest is not None:
+                dest = dest.decode('utf-8')
             if path != dest:
                 return (item, self.MOVE)
             elif (os.path.getmtime(syspath(dest))
@@ -202,16 +220,25 @@ class External(object):
                                 path_formats=self.path_formats)
 
     def set_path(self, item, path):
-        item[self.path_key] = unicode(path, 'utf8')
+        if sys.version_info[0] < 3:
+            item[self.path_key] = unicode(path, 'utf8')
+        else:
+            item[self.path_key] = path
 
     def get_path(self, item):
         try:
-            return item[self.path_key].encode('utf8')
+            if sys.version_info[0] < 3:
+                return item[self.path_key].encode('utf8')
+            else:
+                return item[self.path_key]
         except KeyError:
             return None
 
     def remove_item(self, item):
-        path = item[self.path_key].encode('utf8')
+        if sys.version_info[0] < 3:
+            path = item[self.path_key].encode('utf8')
+        else:
+            path = item[self.path_key]
         util.remove(path)
         util.prune_dirs(path, root=self.directory)
         del item[self.path_key]
@@ -232,6 +259,7 @@ class ExternalConvert(External):
         convert_plugin = convert.ConvertPlugin()
         self._encode = convert_plugin.encode
         self._embed = convert_plugin.config['embed'].get(bool)
+        self.maxbr = convert_plugin.config['max_bitrate'].get(int) * 1000
         self.formats = [f.lower() for f in formats]
         self.convert_cmd, self.ext = convert.get_format(self.formats[0])
 
@@ -262,12 +290,16 @@ class ExternalConvert(External):
     def destination(self, item):
         dest = super(ExternalConvert, self).destination(item)
         if self.should_transcode(item):
-            return os.path.splitext(dest)[0] + '.' + self.ext
+            return os.path.splitext(dest)[0] + bytes('.', 'utf-8') + self.ext
         else:
             return dest
 
     def should_transcode(self, item):
-        return item.format.lower() not in self.formats
+        bitrate = item.bitrate
+        maxbr = self.maxbr
+        fmt = item.format.lower()
+        allowed_fmt = self.formats
+        return eval(self.convert_when)
 
 
 class SymlinkView(External):

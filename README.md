@@ -21,7 +21,7 @@ of beets.
 
 ```
 pip install --upgrade beets>=1.3.13
-pip install git+git://github.com/geigerzaehler/beets-alternatives.git@master
+pip install git+git://github.com/hecal3/beets-alternatives.git@master
 ```
 
 Don’t forget to [enable the plugin][using plugins]. You may use the
