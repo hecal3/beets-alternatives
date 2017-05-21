@@ -59,7 +59,6 @@ class AlternativesPlugin(BeetsPlugin):
             raise KeyError(name)
 
         if conf['formats'].exists():
-            # fmt = conf['formats'].get(unicode)
             fmt = get_unicode_config(conf, 'formats')
             if fmt == 'link':
                 return SymlinkView(name, lib, conf)
@@ -124,7 +123,6 @@ class External(object):
             self.convert_when = 'True'
 
         self.copy_albumart = config.get(dict).get('copy_albumart', True)
-
         self.removable = config.get(dict).get('removable', True)
 
         if 'directory' in config:
