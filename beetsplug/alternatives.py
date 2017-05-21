@@ -105,7 +105,6 @@ class External(object):
         self.lib = lib
         self.path_key = 'alt.{0}'.format(name)
         self.parse_config(config)
-        self.other_ext = frozenset([".jpg", ".jpeg", ".png"])
 
     def parse_config(self, config):
         if 'paths' in config:
@@ -117,10 +116,11 @@ class External(object):
         self.query, _ = parse_query_string(query, Item)
 
         if 'convert_when' in config:
-            # self.convert_when = config['convert_when'].get(unicode)
             self.convert_when = get_unicode_config(config, 'convert_when')
         else:
             self.convert_when = 'True'
+
+        self.other_ext = frozenset(config.get(dict).get('albumart_ext', [".jpg", ".jpeg", ".png"]))
 
         self.copy_albumart = config.get(dict).get('copy_albumart', True)
         self.removable = config.get(dict).get('removable', True)
