@@ -106,6 +106,7 @@ class External(object):
         self.lib = lib
         self.path_key = 'alt.{0}'.format(name)
         self.parse_config(config)
+        self.other_ext = frozenset([".jpg", ".jpeg", ".png"])
 
     def parse_config(self, config):
         if 'paths' in config:
@@ -121,6 +122,8 @@ class External(object):
             self.convert_when = get_unicode_config(config, 'convert_when')
         else:
             self.convert_when = 'True'
+
+        self.copy_albumart = config.get(dict).get('copy_albumart', True)
 
         self.removable = config.get(dict).get('removable', True)
 
@@ -240,8 +243,21 @@ class External(object):
         else:
             path = item[self.path_key]
         util.remove(path)
+        self.remove_albumart(path)
         util.prune_dirs(path, root=self.directory)
         del item[self.path_key]
+
+    def remove_albumart(self, path):
+        dirname = os.path.dirname(path)
+        files = os.listdir(dirname)
+        for f in files:
+            if os.path.splitext(f)[1].decode("utf-8") not in self.other_ext:
+                return False
+
+        for f in files:
+            fullpath = os.path.join(dirname, f)
+            util.remove(fullpath)
+        return True
 
     def converter(self):
         def _convert(item):
@@ -278,7 +294,17 @@ class ExternalConvert(External):
             else:
                 log.debug(u'copying {0}'.format(displayable_path(dest)))
                 util.copy(item.path, dest, replace=True)
+
+            if self.copy_albumart:
+                copy_art(item, dest)
             return item, dest
+
+        def copy_art(item, path):
+            album = item.get_album()
+            if album.artpath and os.path.splitext(album.artpath)[1].decode("utf-8") in self.other_ext:
+                bname = os.path.basename(album.artpath)
+                destpath = os.path.join(os.path.dirname(path), bname)
+                util.copy(album.artpath, destpath, replace=True)
 
         def embed_art(item, path):
             album = item.get_album()
